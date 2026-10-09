@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: travel-postgres
+    environment:
+      POSTGRES_USER: travel
+      POSTGRES_PASSWORD: travel_dev
+      POSTGRES_DB: travel_planning
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: travel-redis
+    ports:
+      - "6379:6379"
+
+  # TODO M1：backend（FastAPI）与 frontend（traveler）服务就绪后接入
+  # backend:
+  #   build: ../backend
+  #   env_file: .env
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on: [postgres, redis]
+
+volumes:
+  pgdata:
