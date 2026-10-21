@@ -1,29 +1,53 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: travel-postgres
+  mysql:
+    image: mysql:8.0
+    container_name: travel-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
     environment:
-      POSTGRES_USER: travel
-      POSTGRES_PASSWORD: travel_dev
-      POSTGRES_DB: travel_planning
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev}
+      MYSQL_DATABASE: travel_planning
+      MYSQL_USER: travel
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-travel_dev}
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动执行建表与初始化数据
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
-  redis:
-    image: redis:7
-    container_name: travel-redis
+  backend:
+    build: ../backend
+    container_name: travel-backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://travel:${MYSQL_PASSWORD:-travel_dev}@mysql:3306/travel_planning?charset=utf8mb4
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    volumes:
+      - export-data:/app/var/exports
+    depends_on:
+      mysql:
+        condition: service_healthy
 
-  # TODO M1：backend（FastAPI）与 frontend（traveler）服务就绪后接入
-  # backend:
-  #   build: ../backend
-  #   env_file: .env
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on: [postgres, redis]
+  frontend:
+    build:
+      context: ../frontend/traveler
+      args:
+        VITE_API_BASE: /api/v1
+    container_name: travel-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
 volumes:
-  pgdata:
+  mysql-data:
+  export-data:
