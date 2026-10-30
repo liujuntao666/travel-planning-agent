@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     export_dir: Path = BASE_DIR / "var" / "exports"
     static_mount: str = "/static"
 
+    # 文件上传与下载
+    file_dir: Path = BASE_DIR / "var" / "files"
+    chunk_dir: Path = BASE_DIR / "var" / "chunks"
+    chunk_size: int = 5 * 1024 * 1024
+    max_upload_size: int = 2 * 1024 * 1024 * 1024
+    max_batch_files: int = 50
+    max_batch_file_size: int = 50 * 1024 * 1024
+    download_block_size: int = 1024 * 1024
+    # 由 Nginx 直接发送文件（X-Accel-Redirect），避免 Python 成为下载瓶颈
+    nginx_accel: bool = False
+    nginx_accel_prefix: str = "/_files/"
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../deploy/.env"),
         env_file_encoding="utf-8",

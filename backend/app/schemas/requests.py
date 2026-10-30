@@ -48,3 +48,16 @@ class HotelReplaceIn(BaseModel):
 
 class ExportIn(BaseModel):
     format: str = Field(pattern="^(PDF|LONG_IMAGE|WECHAT_ARTICLE)$")
+
+
+class FileInitIn(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    file_size: int = Field(gt=0)
+    file_hash: str = Field(min_length=32, max_length=64)
+    chunk_size: int | None = Field(default=None, ge=1)
+    owner_id: int = Field(gt=0)
+
+
+class FileCompleteIn(BaseModel):
+    file_hash: str | None = Field(default=None, min_length=32, max_length=64)
+    owner_id: int | None = Field(default=None, gt=0)

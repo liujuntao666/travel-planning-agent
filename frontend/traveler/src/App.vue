@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import ChatPanel from './components/ChatPanel.vue'
+import FileTransferPanel from './components/FileTransferPanel.vue'
 import TripPanel from './components/TripPanel.vue'
 import { api, API_BASE, resolveFileUrl, streamMessage } from './api/client'
 import type {
@@ -45,6 +46,7 @@ const errorMsg = ref('')
 const toast = ref('')
 const toolCalls = ref<ToolCallInfo[]>([])
 const degraded = ref<string[]>([])
+const showFiles = ref(false)
 
 const loggedIn = computed(() => Boolean(user.value))
 const conversationTitle = computed(
@@ -416,7 +418,10 @@ onMounted(async () => {
             <span class="user-avatar">{{ (user?.nickname || '旅').slice(0, 1) }}</span>
             <span class="user-name">{{ user?.nickname || '旅行者' }}</span>
           </div>
-          <button type="button" class="logout-btn" @click="logout">退出</button>
+          <div class="footer-actions">
+            <button type="button" class="files-btn" @click="showFiles = true">文件空间</button>
+            <button type="button" class="logout-btn" @click="logout">退出</button>
+          </div>
         </div>
       </aside>
 
@@ -458,6 +463,12 @@ onMounted(async () => {
         </div>
       </main>
     </template>
+
+    <FileTransferPanel
+      v-if="showFiles && user"
+      :user-id="user.id"
+      @close="showFiles = false"
+    />
 
     <transition name="toast">
       <div v-if="toast" class="toast">{{ toast }}</div>
@@ -761,6 +772,28 @@ onMounted(async () => {
 
 .logout-btn:hover {
   color: #b91c1c;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.files-btn {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.files-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .workspace {

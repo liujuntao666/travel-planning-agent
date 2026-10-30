@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.agent_core.llm import llm_client
-from app.api import conversations, resources, trips, users
+from app.api import conversations, files, resources, trips, users
 from app.common.config import settings
 from app.common.db import engine, init_db
 from app.common.errors import AppError, app_error_handler, http_error_handler
@@ -18,6 +18,8 @@ from app.common.logging import setup_logging
 async def lifespan(_: FastAPI):
     setup_logging()
     settings.export_dir.mkdir(parents=True, exist_ok=True)
+    settings.file_dir.mkdir(parents=True, exist_ok=True)
+    settings.chunk_dir.mkdir(parents=True, exist_ok=True)
     init_db()
     yield
 
@@ -47,6 +49,7 @@ app.include_router(users.router, prefix=settings.api_prefix)
 app.include_router(conversations.router, prefix=settings.api_prefix)
 app.include_router(trips.router, prefix=settings.api_prefix)
 app.include_router(resources.router, prefix=settings.api_prefix)
+app.include_router(files.router, prefix=settings.api_prefix)
 
 
 @app.get("/health")

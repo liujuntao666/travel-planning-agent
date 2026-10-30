@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.file import FileObject, UploadChunk, UploadSession
 from app.models.log import ContentAuditLog, ToolCallLog
 from app.models.resource import (
     Hotel,
@@ -23,6 +24,9 @@ from app.models.user import Conversation, Message, RequirementSlot, User
 __all__ = [
     "Base",
     "User",
+    "FileObject",
+    "UploadSession",
+    "UploadChunk",
     "Conversation",
     "Message",
     "RequirementSlot",

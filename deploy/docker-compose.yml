@@ -29,10 +29,14 @@ services:
       - .env
     environment:
       DATABASE_URL: mysql+pymysql://travel:${MYSQL_PASSWORD:-travel_dev}@mysql:3306/travel_planning?charset=utf8mb4
+      # 开启后下载由前端 Nginx 直接发送（X-Accel-Redirect）
+      NGINX_ACCEL: "true"
     ports:
       - "8000:8000"
     volumes:
       - export-data:/app/var/exports
+      - file-data:/app/var/files
+      - chunk-data:/app/var/chunks
     depends_on:
       mysql:
         condition: service_healthy
@@ -45,9 +49,14 @@ services:
     container_name: travel-frontend
     ports:
       - "8080:80"
+    # 只读挂载文件卷，供 /_files/ internal location 直接发送
+    volumes:
+      - file-data:/srv/files:ro
     depends_on:
       - backend
 
 volumes:
   mysql-data:
   export-data:
+  file-data:
+  chunk-data:

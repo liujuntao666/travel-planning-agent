@@ -8,6 +8,8 @@ TMP_DIR = tempfile.mkdtemp(prefix="travel-test-")
 os.environ["DATABASE_URL"] = f"sqlite:///{TMP_DIR}/test.db"
 os.environ["AUTO_CREATE_TABLES"] = "true"
 os.environ["EXPORT_DIR"] = f"{TMP_DIR}/exports"
+os.environ["FILE_DIR"] = f"{TMP_DIR}/files"
+os.environ["CHUNK_DIR"] = f"{TMP_DIR}/chunks"
 os.environ["TOOL_TIMEOUT_MS"] = "5000"
 
 from fastapi.testclient import TestClient  # noqa: E402
