@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import {
+  clearDownloadBlobs,
+  deleteFile,
   downloadFile,
   listFiles,
   uploadBatch,
@@ -36,6 +38,7 @@ const files = ref<StoredFile[]>([])
 const downloads = reactive<Record<number, DownloadState>>({})
 const controllers = new Map<number, AbortController>()
 const loading = ref(false)
+const deleting = ref(0)
 const notice = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragActive = ref(false)
@@ -129,7 +132,7 @@ async function handleFiles(selected: FileList | File[]) {
   const smallFiles = list.filter((file) => file.size < LARGE_THRESHOLD)
 
   for (const file of largeFiles) {
-    const task: UploadTask = {
+    const task = reactive<UploadTask>({
       id: nextTaskId(),
       title: file.name,
       detail: `${formatBytes(file.size)} · 分片上传`,
@@ -137,13 +140,13 @@ async function handleFiles(selected: FileList | File[]) {
       phase: '等待上传…',
       status: 'running',
       error: '',
-    }
+    })
     tasks.value.unshift(task)
     void runLarge(file, task)
   }
 
   if (smallFiles.length) {
-    const task: UploadTask = {
+    const task = reactive<UploadTask>({
       id: nextTaskId(),
       title: smallFiles.length === 1 ? smallFiles[0].name : `${smallFiles.length} 个小文件`,
       detail: smallFiles.map((file) => file.name).join('、').slice(0, 80),
@@ -151,7 +154,7 @@ async function handleFiles(selected: FileList | File[]) {
       phase: '等待上传…',
       status: 'running',
       error: '',
-    }
+    })
     tasks.value.unshift(task)
     await runBatch(smallFiles, task)
   }
@@ -208,6 +211,23 @@ async function toggleDownload(file: StoredFile) {
     current.error = aborted ? '' : errorText(err)
   } finally {
     controllers.delete(file.file_id)
+  }
+}
+
+async function removeFile(file: StoredFile) {
+  if (!window.confirm(`确定删除「${file.name}」？删除后不可恢复。`)) return
+  controllers.get(file.file_id)?.abort()
+  deleting.value = file.file_id
+  try {
+    await deleteFile(file.file_id, props.userId)
+    await clearDownloadBlobs(file.file_id)
+    delete downloads[file.file_id]
+    notice.value = `已删除「${file.name}」`
+    await refreshFiles()
+  } catch (err) {
+    notice.value = errorText(err)
+  } finally {
+    deleting.value = 0
   }
 }
 
@@ -315,9 +335,19 @@ onMounted(refreshFiles)
                   <template v-else>下载完成</template>
                 </span>
               </div>
-              <button type="button" class="download-btn" @click="toggleDownload(file)">
-                {{ downloadLabel(file) }}
-              </button>
+              <div class="file-actions">
+                <button type="button" class="download-btn" @click="toggleDownload(file)">
+                  {{ downloadLabel(file) }}
+                </button>
+                <button
+                  type="button"
+                  class="download-btn danger"
+                  :disabled="deleting === file.file_id"
+                  @click="removeFile(file)"
+                >
+                  {{ deleting === file.file_id ? '删除中…' : '删除' }}
+                </button>
+              </div>
             </li>
           </ul>
         </section>
@@ -545,6 +575,13 @@ onMounted(refreshFiles)
   font-size: 11.5px;
 }
 
+.file-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .download-btn {
   flex-shrink: 0;
   border: 1px solid var(--line-strong);
@@ -560,6 +597,22 @@ onMounted(refreshFiles)
 .download-btn:hover {
   border-color: var(--accent);
   color: var(--accent-strong);
+}
+
+.download-btn.danger {
+  color: #b42318;
+  border-color: #fecdca;
+}
+
+.download-btn.danger:hover {
+  background: #fef3f2;
+  border-color: #f04438;
+  color: #b42318;
+}
+
+.download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .empty {

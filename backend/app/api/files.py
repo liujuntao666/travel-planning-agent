@@ -93,6 +93,13 @@ def list_files(owner_id: int = Query(...), db: Session = Depends(get_db)) -> lis
     return service.list_files(db, owner_id)
 
 
+@router.delete("/{file_id}")
+def delete_file(file_id: int, owner_id: int | None = Query(default=None),
+                db: Session = Depends(get_db)) -> dict:
+    """删除文件记录与磁盘内容；重复删除返回 404。"""
+    return service.delete_file(db, file_id, owner_id)
+
+
 @router.get("/{file_id}")
 def download(file_id: int, request: Request, db: Session = Depends(get_db)):
     """支持 Range/206 的流式下载；断点续传由客户端保存已下载字节数。"""

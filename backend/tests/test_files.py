@@ -165,3 +165,40 @@ def test_batch_upload_and_list(client, user):
     listed = client.get(f"/api/v1/files?owner_id={uid}").json()
     names = {item["name"] for item in listed}
     assert {"a.txt", "b.bin"} <= names
+
+
+def test_delete_file_removes_record_and_disk(client, user):
+    uid = user["id"]
+    before = {p.name for p in Path(settings.file_dir).glob("*")}
+
+    resp = client.post(
+        "/api/v1/files/batch",
+        data={"owner_id": str(uid)},
+        files=[("files", ("del.txt", b"bye", "text/plain")),
+               ("files", ("keep.txt", b"stay", "text/plain"))],
+    )
+    items = resp.json()["items"]
+    del_id = next(item["file_id"] for item in items if item["name"] == "del.txt")
+    after_upload = {p.name for p in Path(settings.file_dir).glob("*")}
+    assert len(after_upload - before) == 2
+
+    forbidden = client.delete(f"/api/v1/files/{del_id}?owner_id={uid + 1}")
+    assert forbidden.status_code == 403
+
+    ok = client.delete(f"/api/v1/files/{del_id}?owner_id={uid}")
+    assert ok.status_code == 200
+    assert ok.json()["deleted"] is True
+
+    listed = client.get(f"/api/v1/files?owner_id={uid}").json()
+    assert "del.txt" not in {item["name"] for item in listed}
+    assert "keep.txt" in {item["name"] for item in listed}
+
+    gone = client.get(f"/api/v1/files/{del_id}")
+    assert gone.status_code == 404
+
+    again = client.delete(f"/api/v1/files/{del_id}?owner_id={uid}")
+    assert again.status_code == 404
+
+    # 磁盘内容同步清理，另一个文件不受影响
+    remaining = {p.name for p in Path(settings.file_dir).glob("*")}
+    assert len(remaining - before) == 1

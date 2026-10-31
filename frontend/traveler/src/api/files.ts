@@ -48,6 +48,9 @@ function toHex(buffer: ArrayBuffer): string {
 }
 
 async function sha256Hex(data: ArrayBuffer | string): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('当前页面无法使用 Web Crypto，请用 http://127.0.0.1:5173 或 HTTPS 访问')
+  }
   const input = typeof data === 'string' ? new TextEncoder().encode(data) : data
   return toHex(await crypto.subtle.digest('SHA-256', input))
 }
@@ -127,7 +130,11 @@ export async function uploadLargeFile(
 ): Promise<{ fileId: number }> {
   const chunkSize = CHUNK_SIZE
   hooks.onPhase?.('计算分片校验值…')
-  const { hashes, fingerprint } = await computeChunkHashes(file, chunkSize)
+  const { hashes, fingerprint } = await computeChunkHashes(
+    file,
+    chunkSize,
+    (ratio) => hooks.onPhase?.(`计算分片校验值… ${Math.round(ratio * 100)}%`),
+  )
 
   hooks.onPhase?.('初始化上传会话…')
   const init = await requestJson<InitResult>('/files/uploads', {
@@ -266,6 +273,10 @@ export function listFiles(ownerId: number): Promise<StoredFile[]> {
   return requestJson<StoredFile[]>(`/files?owner_id=${ownerId}`)
 }
 
+export function deleteFile(fileId: number, ownerId: number): Promise<{ file_id: number; deleted: boolean }> {
+  return requestJson(`/files/${fileId}?owner_id=${ownerId}`, { method: 'DELETE' })
+}
+
 export async function uploadStatus(uploadId: string, ownerId: number): Promise<UploadStatus> {
   return requestJson<UploadStatus>(`/files/uploads/${uploadId}?owner_id=${ownerId}`)
 }
@@ -323,7 +334,7 @@ async function loadDownloadBlobs(fileId: number): Promise<Blob[]> {
   }
 }
 
-async function clearDownloadBlobs(fileId: number) {
+export async function clearDownloadBlobs(fileId: number) {
   const db = await openDb()
   try {
     const keys = await idbRequest(

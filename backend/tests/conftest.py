@@ -10,6 +10,7 @@ os.environ["AUTO_CREATE_TABLES"] = "true"
 os.environ["EXPORT_DIR"] = f"{TMP_DIR}/exports"
 os.environ["FILE_DIR"] = f"{TMP_DIR}/files"
 os.environ["CHUNK_DIR"] = f"{TMP_DIR}/chunks"
+os.environ["NGINX_ACCEL"] = "false"
 os.environ["TOOL_TIMEOUT_MS"] = "5000"
 
 from fastapi.testclient import TestClient  # noqa: E402

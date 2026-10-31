@@ -333,6 +333,20 @@ def list_files(db: Session, owner_id: int) -> list[dict]:
     ]
 
 
+def delete_file(db: Session, file_id: int, owner_id: int | None = None) -> dict:
+    """软删除文件记录，并清理磁盘内容。"""
+    record = db.get(FileObject, file_id)
+    if record is None or record.deleted:
+        raise NotFoundError("文件不存在")
+    if owner_id is not None and record.owner_id != owner_id:
+        raise AppError("FORBIDDEN", "无权删除该文件", 403)
+
+    record.deleted = 1
+    db.commit()
+    file_path(record.storage_name).unlink(missing_ok=True)
+    return {"file_id": file_id, "deleted": True}
+
+
 def parse_range(value: str | None, size: int):
     """返回 None、'invalid' 或 (start, end)（闭区间）。"""
     if not value:
