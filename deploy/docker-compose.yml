@@ -22,6 +22,20 @@ services:
       timeout: 5s
       retries: 30
 
+  redis:
+    image: redis:7-alpine
+    container_name: travel-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     build: ../backend
     container_name: travel-backend
@@ -29,16 +43,14 @@ services:
       - .env
     environment:
       DATABASE_URL: mysql+pymysql://travel:${MYSQL_PASSWORD:-travel_dev}@mysql:3306/travel_planning?charset=utf8mb4
-      # 开启后下载由前端 Nginx 直接发送（X-Accel-Redirect）
-      NGINX_ACCEL: "true"
     ports:
       - "8000:8000"
     volumes:
       - export-data:/app/var/exports
-      - file-data:/app/var/files
-      - chunk-data:/app/var/chunks
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:
@@ -49,14 +61,21 @@ services:
     container_name: travel-frontend
     ports:
       - "8080:80"
-    # 只读挂载文件卷，供 /_files/ internal location 直接发送
-    volumes:
-      - file-data:/srv/files:ro
+    depends_on:
+      - backend
+
+  admin-frontend:
+    build:
+      context: ../frontend/admin
+      args:
+        VITE_API_BASE: /api/v1
+    container_name: travel-admin
+    ports:
+      - "8081:80"
     depends_on:
       - backend
 
 volumes:
   mysql-data:
   export-data:
-  file-data:
-  chunk-data:
+  redis-data:

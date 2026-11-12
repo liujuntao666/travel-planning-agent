@@ -11,51 +11,115 @@ import type {
   VersionCompare,
   VersionInfo,
 } from './types'
+import {
+  API_BASE,
+  API_ORIGIN,
+  getToken,
+  newRequestId,
+  request,
+  resolveFileUrl,
+  setToken,
+} from './http'
 
-const RAW_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || 'http://127.0.0.1:8000/api/v1'
+export { API_BASE, API_ORIGIN, resolveFileUrl }
 
-export const API_BASE = RAW_BASE.replace(/\/+$/, '')
-export const API_ORIGIN = API_BASE.replace(/\/api\/v1$/, '')
-
-export function resolveFileUrl(url?: string | null): string {
-  if (!url) return ''
-  if (/^https?:\/\//i.test(url)) return url
-  return `${API_ORIGIN}${url.startsWith('/') ? url : `/${url}`}`
+interface PageResult<T> {
+  items: T[]
+  total: number
+  page: number
+  page_size: number
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-    ...init,
-  })
-  if (!res.ok) {
-    let message = `请求失败（HTTP ${res.status}）`
-    try {
-      const data = (await res.json()) as { message?: string; detail?: string }
-      message = data.message || data.detail || message
-    } catch {
-      // 非 JSON 响应，保留默认提示
-    }
-    throw new Error(message)
-  }
-  return (await res.json()) as T
+interface LoginResult extends User {
+  access_token: string
+  token_type: string
+  expires_in: number
+  role?: string
+}
+
+export interface CaptchaResult {
+  captcha_id: string
+  image: string
+  expires_in: number
+  debug_code?: string
+}
+
+export interface AuthSession {
+  user: User
+  access_token: string
+  token_type: string
+  expires_in: number
+  roles: string[]
+  permissions: string[]
+  menus: unknown[]
+  is_admin: boolean
+}
+
+export interface PasswordLoginPayload {
+  username: string
+  password: string
+  captcha_id: string
+  captcha_code: string
+}
+
+export interface RegisterPayload extends PasswordLoginPayload {
+  nickname?: string | null
+  email?: string | null
+  phone?: string | null
 }
 
 export const api = {
-  login: (openId: string, nickname?: string) =>
-    request<User>('/users/login', {
+  login: async (openId: string, nickname?: string) => {
+    const data = await request<LoginResult>('/users/login', {
       method: 'POST',
-      body: JSON.stringify({ open_id: openId, nickname: nickname || null, source: 'APP' }),
+      data: { open_id: openId, nickname: nickname || null, source: 'APP' },
+    })
+    setToken(data.access_token)
+    return data
+  },
+
+  captcha: () => request<CaptchaResult>('/auth/captcha'),
+
+  passwordLogin: async (payload: PasswordLoginPayload) => {
+    const data = await request<AuthSession>('/auth/login', { method: 'POST', data: payload })
+    setToken(data.access_token)
+    return data
+  },
+
+  register: async (payload: RegisterPayload) => {
+    const data = await request<AuthSession>('/auth/register', { method: 'POST', data: payload })
+    setToken(data.access_token)
+    return data
+  },
+
+  me: () => request<AuthSession>('/auth/me'),
+
+  forgotPassword: (account: string, captchaId: string, captchaCode: string) =>
+    request<{ message: string; expires_in: number; reset_token: string | null }>(
+      '/auth/password/forgot',
+      { method: 'POST', data: { account, captcha_id: captchaId, captcha_code: captchaCode } },
+    ),
+
+  resetPassword: (resetToken: string, newPassword: string) =>
+    request<{ message: string }>('/auth/password/reset', {
+      method: 'POST',
+      data: { reset_token: resetToken, new_password: newPassword },
     }),
+
+  logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
 
   createConversation: (userId: number, title?: string) =>
     request<{ id: number; user_id: number; title: string | null }>('/conversations', {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId, title: title || null }),
+      data: { user_id: userId, title: title || null },
     }),
 
-  listConversations: (userId: number) =>
-    request<ConversationSummary[]>(`/conversations?user_id=${userId}`),
+  listConversations: async (userId: number) => {
+    const page = await request<PageResult<ConversationSummary>>('/conversations', {
+      params: { user_id: userId, page: 1, page_size: 50, sort: 'id:desc' },
+    })
+    return page.items
+  },
 
   conversationDetail: (conversationId: number) =>
     request<ConversationDetail>(`/conversations/${conversationId}`),
@@ -63,18 +127,25 @@ export const api = {
   sendMessage: (conversationId: number, content: string, startDate?: string | null) =>
     request<ChatResult>(`/conversations/${conversationId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content, start_date: startDate || null }),
+      data: { content, start_date: startDate || null },
     }),
 
   getTrip: (tripId: number) => request<Trip>(`/trips/${tripId}`),
 
-  versions: (tripId: number) => request<VersionInfo[]>(`/trips/${tripId}/versions`),
+  versions: async (tripId: number) => {
+    const page = await request<PageResult<VersionInfo>>(`/trips/${tripId}/versions`, {
+      params: { page: 1, page_size: 100, sort: 'version_no:desc' },
+    })
+    return page.items
+  },
 
   versionDetail: (tripId: number, versionId: number) =>
     request<Trip>(`/trips/${tripId}/versions/${versionId}`),
 
   compareVersions: (tripId: number, base: number, target: number) =>
-    request<VersionCompare>(`/trips/${tripId}/versions/compare?base=${base}&target=${target}`),
+    request<VersionCompare>(`/trips/${tripId}/versions/compare`, {
+      params: { base, target },
+    }),
 
   activateVersion: (tripId: number, versionId: number) =>
     request<Trip>(`/trips/${tripId}/versions/${versionId}/activate`, { method: 'POST' }),
@@ -86,7 +157,7 @@ export const api = {
   ) =>
     request<Trip>(`/trips/${tripId}/items/${itemId}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      data: payload,
     }),
 
   deleteItem: (tripId: number, itemId: number) =>
@@ -95,7 +166,7 @@ export const api = {
   moveItem: (tripId: number, itemId: number, direction: 'up' | 'down') =>
     request<Trip>(`/trips/${tripId}/items/${itemId}/move`, {
       method: 'POST',
-      body: JSON.stringify({ direction }),
+      data: { direction },
     }),
 
   addItem: (
@@ -114,13 +185,13 @@ export const api = {
   ) =>
     request<Trip>(`/trips/${tripId}/items`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      data: payload,
     }),
 
   replaceHotel: (tripId: number, lodgingId: number, hotelId: number) =>
     request<Trip>(`/trips/${tripId}/lodgings/${lodgingId}/replace`, {
       method: 'POST',
-      body: JSON.stringify({ hotel_id: hotelId }),
+      data: { hotel_id: hotelId },
     }),
 
   replan: (tripId: number) =>
@@ -129,21 +200,25 @@ export const api = {
   createExport: (tripId: number, format: 'PDF' | 'LONG_IMAGE' | 'WECHAT_ARTICLE') =>
     request<ExportRecord>(`/trips/${tripId}/exports`, {
       method: 'POST',
-      body: JSON.stringify({ format }),
+      data: { format },
     }),
 
-  listExports: (tripId: number) => request<ExportRecord[]>(`/trips/${tripId}/exports`),
+  listExports: async (tripId: number) => {
+    const page = await request<PageResult<ExportRecord>>(`/trips/${tripId}/exports`, {
+      params: { page: 1, page_size: 100, sort: 'id:desc' },
+    })
+    return page.items
+  },
 
   styles: () => request<StyleOption[]>('/meta/styles'),
 
   cities: () => request<string[]>('/resources/cities'),
 
-  pois: (city?: string, keyword?: string) => {
-    const params = new URLSearchParams()
-    if (city) params.set('city', city)
-    if (keyword) params.set('keyword', keyword)
-    const qs = params.toString()
-    return request<PoiOption[]>(`/resources/pois${qs ? `?${qs}` : ''}`)
+  pois: async (city?: string, keyword?: string) => {
+    const page = await request<PageResult<PoiOption>>('/resources/pois', {
+      params: { city: city || undefined, keyword: keyword || undefined, page: 1, page_size: 100 },
+    })
+    return page.items
   },
 }
 
@@ -154,9 +229,14 @@ export async function streamMessage(
   onEvent: StreamHandler,
   signal?: AbortSignal,
 ): Promise<void> {
+  const token = getToken()
   const res = await fetch(`${API_BASE}/conversations/${conversationId}/messages/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'Idempotency-Key': newRequestId(),
+    },
     body: JSON.stringify({ content, start_date: startDate || null }),
     signal,
   })

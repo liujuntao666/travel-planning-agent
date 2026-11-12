@@ -36,21 +36,45 @@ class Settings(BaseSettings):
     max_day_count: int = 15
     max_people: int = 20
 
+    # 鉴权（HMAC-SHA256 签名令牌 + Redis 会话）
+    auth_secret: str = "travel-planning-dev-secret-change-me"
+    auth_token_ttl_s: int = 7200
+    authz_cache_ttl_s: int = 300
+    allow_open_id_login: bool = True
+
+    # Redis：会话、验证码、限流、权限与字典缓存
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    redis_required: bool = False
+
+    # 登录安全
+    captcha_ttl_s: int = 120
+    captcha_debug: bool = False  # 仅联调/自动化测试：验证码响应附带明文答案
+    login_max_failures: int = 5
+    login_lock_s: int = 900
+    login_rate_limit: int = 10
+    login_rate_window_s: int = 60
+    register_rate_limit: int = 5
+    register_rate_window_s: int = 3600
+    password_iterations: int = 200_000
+    password_reset_ttl_s: int = 600
+
+    # 初始化账号（首次启动自动创建，生产环境请立即修改密码）
+    seed_rbac: bool = True
+    seed_admin_username: str = "admin"
+    seed_admin_password: str = "Admin@123456"
+    seed_demo_username: str = "traveler"
+    seed_demo_password: str = "Traveler@123456"
+
+    # 幂等控制
+    idempotency_ttl_s: int = 86400
+
+    # 列表分页
+    default_page_size: int = 20
+    max_page_size: int = 100
+
     # 导出
     export_dir: Path = BASE_DIR / "var" / "exports"
     static_mount: str = "/static"
-
-    # 文件上传与下载
-    file_dir: Path = BASE_DIR / "var" / "files"
-    chunk_dir: Path = BASE_DIR / "var" / "chunks"
-    chunk_size: int = 5 * 1024 * 1024
-    max_upload_size: int = 2 * 1024 * 1024 * 1024
-    max_batch_files: int = 50
-    max_batch_file_size: int = 50 * 1024 * 1024
-    download_block_size: int = 1024 * 1024
-    # 由 Nginx 直接发送文件（X-Accel-Redirect），避免 Python 成为下载瓶颈
-    nginx_accel: bool = False
-    nginx_accel_prefix: str = "/_files/"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../deploy/.env"),

@@ -203,7 +203,7 @@ watch(
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 22px;
+  padding: 24px max(24px, calc((100% - 820px) / 2));
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -254,14 +254,15 @@ watch(
 }
 
 .avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
   background: var(--ink);
   color: #fff;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
@@ -270,13 +271,13 @@ watch(
 }
 
 .bubble {
-  max-width: min(560px, 82%);
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: var(--panel-alt);
+  max-width: min(600px, 84%);
+  padding: 11px 15px;
+  border-radius: 4px 14px 14px 14px;
+  background: #fff;
   border: 1px solid var(--line);
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.68;
   word-break: break-word;
 }
 
@@ -284,6 +285,7 @@ watch(
   background: var(--accent);
   color: #fff;
   border-color: transparent;
+  border-radius: 14px 4px 14px 14px;
 }
 
 .bubble-time {
@@ -364,27 +366,36 @@ watch(
 .composer {
   display: flex;
   gap: 10px;
-  padding: 12px 22px 18px;
   align-items: flex-end;
+  margin: 0 max(24px, calc((100% - 820px) / 2)) 20px;
+  padding: 8px 8px 8px 14px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  box-shadow: 0 12px 26px -22px rgba(15, 23, 42, 0.5);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .composer textarea {
   flex: 1;
   resize: none;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  padding: 10px 12px;
+  border: none;
+  padding: 8px 0;
   font: inherit;
   font-size: 14px;
-  background: #fff;
+  background: transparent;
   color: var(--ink);
   line-height: 1.5;
 }
 
-.composer textarea:focus {
-  outline: 2px solid var(--accent-ring);
-  outline-offset: 0;
-  border-color: var(--accent);
+.composer textarea:focus,
+.composer textarea:focus-visible {
+  outline: none;
 }
 
 .send-btn {
@@ -394,9 +405,15 @@ watch(
   background: var(--accent);
   color: #fff;
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
-  min-width: 84px;
+  min-width: 78px;
+  transition: background 0.15s;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-strong);
 }
 
 .send-btn:disabled {

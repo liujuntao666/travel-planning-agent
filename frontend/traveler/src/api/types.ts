@@ -1,10 +1,15 @@
 export interface User {
   id: number
   open_id: string
+  username?: string | null
   nickname: string | null
+  email?: string | null
+  phone?: string | null
   avatar_url?: string | null
   source?: string
+  role?: string
   status?: number
+  last_login_at?: string | null
 }
 
 export interface ConversationSummary {

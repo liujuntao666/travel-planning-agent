@@ -155,4 +155,75 @@ INSERT INTO `t_content_audit_log` (`id`, `biz_type`, `biz_id`, `conversation_id`
   (1, 'MESSAGE', 2, 1, '3f2a9c1d5e6b7a8f', 'PASS', 'LOW', NULL, 'MACHINE', '放行', '2026-10-15 09:01:25'),
   (2, 'EXPORT', 1, 1, '8b1c4d7e2f3a5b6c', 'PASS', 'LOW', NULL, 'MACHINE', '放行', '2026-10-15 09:05:00');
 
+-- ================================================================ RBAC 前置授权
+-- 角色
+INSERT INTO `t_role` (`id`, `role_code`, `role_name`, `description`, `status`) VALUES
+  (1, 'ADMIN', '超级管理员', '拥有全部菜单与接口权限', 1),
+  (2, 'OPERATOR', '运营管理员', '可查看运营日志与业务数据', 1),
+  (3, 'USER', '普通用户', '旅行规划与行程编辑', 1);
+
+-- 菜单（前端据此动态渲染）
+INSERT INTO `t_menu` (`id`, `menu_code`, `menu_name`, `parent_id`, `path`, `icon`, `sort_no`, `status`) VALUES
+  (1, 'chat', '旅行规划', NULL, '/chat', 'chat', 1, 1),
+  (2, 'trips', '我的行程', NULL, '/trips', 'map', 2, 1),
+  (3, 'tips', '出行锦囊', NULL, '/tips', 'book', 3, 1),
+  (4, 'admin', '系统管理', NULL, '/admin', 'shield', 9, 1),
+  (5, 'admin_roles', '角色权限', 4, '/admin/roles', 'users', 1, 1),
+  (6, 'admin_menus', '菜单管理', 4, '/admin/menus', 'menu', 2, 1),
+  (7, 'admin_permissions', '接口权限', 4, '/admin/permissions', 'key', 3, 1),
+  (8, 'admin_users', '用户授权', 4, '/admin/users', 'user', 4, 1);
+
+-- 接口权限
+INSERT INTO `t_permission` (`id`, `perm_code`, `perm_name`, `resource`, `method`, `api_path`, `status`) VALUES
+  (1, 'trip:read', '查看行程', 'trip', 'GET', '/api/v1/trips/{trip_id}', 1),
+  (2, 'trip:write', '编辑行程', 'trip', 'PATCH', '/api/v1/trips/{trip_id}/items/{item_id}', 1),
+  (3, 'conversation:read', '查看会话', 'conversation', 'GET', '/api/v1/conversations', 1),
+  (4, 'conversation:write', '发送消息', 'conversation', 'POST', '/api/v1/conversations/{id}/messages', 1),
+  (5, 'resource:read', '查询资源', 'resource', 'GET', '/api/v1/resources/pois', 1),
+  (6, 'export:create', '导出行程', 'export', 'POST', '/api/v1/trips/{trip_id}/exports', 1),
+  (7, 'system:log:read', '查看工具日志', 'system', 'GET', '/api/v1/tool-logs', 1),
+  (8, 'rbac:role:list', '角色列表', 'rbac', 'GET', '/api/v1/admin/roles', 1),
+  (9, 'rbac:role:create', '新增角色', 'rbac', 'POST', '/api/v1/admin/roles', 1),
+  (10, 'rbac:role:update', '修改角色', 'rbac', 'PATCH', '/api/v1/admin/roles/{id}', 1),
+  (11, 'rbac:role:delete', '删除角色', 'rbac', 'DELETE', '/api/v1/admin/roles/{id}', 1),
+  (12, 'rbac:role:grant', '角色授权', 'rbac', 'PUT', '/api/v1/admin/roles/{id}/menus', 1),
+  (13, 'rbac:menu:list', '菜单列表', 'rbac', 'GET', '/api/v1/admin/menus', 1),
+  (14, 'rbac:menu:create', '新增菜单', 'rbac', 'POST', '/api/v1/admin/menus', 1),
+  (15, 'rbac:menu:update', '修改菜单', 'rbac', 'PATCH', '/api/v1/admin/menus/{id}', 1),
+  (16, 'rbac:menu:delete', '删除菜单', 'rbac', 'DELETE', '/api/v1/admin/menus/{id}', 1),
+  (17, 'rbac:permission:list', '权限列表', 'rbac', 'GET', '/api/v1/admin/permissions', 1),
+  (18, 'rbac:permission:create', '新增权限', 'rbac', 'POST', '/api/v1/admin/permissions', 1),
+  (19, 'rbac:permission:update', '修改权限', 'rbac', 'PATCH', '/api/v1/admin/permissions/{id}', 1),
+  (20, 'rbac:permission:delete', '删除权限', 'rbac', 'DELETE', '/api/v1/admin/permissions/{id}', 1),
+  (21, 'rbac:user:list', '用户列表', 'rbac', 'GET', '/api/v1/admin/users', 1),
+  (22, 'rbac:user:grant', '用户授权', 'rbac', 'PUT', '/api/v1/admin/users/{id}/roles', 1);
+
+-- 角色-菜单：ADMIN 全部，OPERATOR / USER 业务菜单
+INSERT INTO `t_role_menu` (`role_id`, `menu_id`) VALUES
+  (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+  (2, 1), (2, 2), (2, 3),
+  (3, 1), (3, 2), (3, 3);
+
+-- 角色-权限
+INSERT INTO `t_role_permission` (`role_id`, `permission_id`) VALUES
+  (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+  (1, 9), (1, 10), (1, 11), (1, 12), (1, 13), (1, 14), (1, 15), (1, 16),
+  (1, 17), (1, 18), (1, 19), (1, 20), (1, 21), (1, 22),
+  (2, 1), (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7),
+  (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6);
+
+-- 演示账号：admin / Admin@123456，traveler / Traveler@123456
+-- 哈希由 PBKDF2-SHA256(200000 次，固定种子盐) 生成
+INSERT INTO `t_user` (`id`, `open_id`, `username`, `password_hash`, `email`, `nickname`, `source`, `role`, `status`) VALUES
+  (2, 'acct:admin', 'admin',
+   'pbkdf2_sha256$200000$seed_fixed_salt_2026$8acee05c8a6f17711e354c1cf10f5c7a3b0bab6ab02dd43ca88c88295e88a10c',
+   'admin@example.com', '系统管理员', 'WEB', 'ADMIN', 1),
+  (3, 'acct:traveler', 'traveler',
+   'pbkdf2_sha256$200000$seed_fixed_salt_2026$2005e952595833dc0d3ed8859620aff3beb42c99d8b047dd0d6b10895e8d9243',
+   'traveler@example.com', '演示旅行者', 'WEB', 'USER', 1);
+
+INSERT INTO `t_user_role` (`user_id`, `role_id`) VALUES
+  (2, 1),
+  (3, 3);
+
 SET FOREIGN_KEY_CHECKS = 1;

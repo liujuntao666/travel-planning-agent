@@ -10,11 +10,15 @@ class User(Base, PKMixin, AuditMixin):
     __tablename__ = "t_user"
 
     open_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    username: Mapped[str | None] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(128))
     nickname: Mapped[str | None] = mapped_column(String(64))
     avatar_url: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(32))
     gender: Mapped[int | None] = mapped_column(Integer, default=0, server_default="0")
     source: Mapped[str | None] = mapped_column(String(32), default="APP", server_default="APP")
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="USER", server_default="USER")
     status: Mapped[int | None] = mapped_column(Integer, default=1, server_default="1")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime)
 

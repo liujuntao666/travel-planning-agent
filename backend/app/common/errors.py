@@ -5,13 +5,11 @@ from fastapi.responses import JSONResponse
 class AppError(Exception):
     """业务异常：携带错误码与 HTTP 状态码，统一转换为 JSON。"""
 
-    def __init__(self, code: str, message: str, status_code: int = 400,
-                 data: dict | None = None) -> None:
+    def __init__(self, code: str, message: str, status_code: int = 400) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
-        self.data = data
 
 
 class NotFoundError(AppError):
@@ -29,11 +27,26 @@ class ValidationError(AppError):
         super().__init__("VALIDATION_ERROR", message, 422)
 
 
+class UnauthorizedError(AppError):
+    def __init__(self, message: str = "缺少或非法的访问令牌") -> None:
+        super().__init__("UNAUTHORIZED", message, 401)
+
+
+class ForbiddenError(AppError):
+    def __init__(self, message: str = "无权访问该资源") -> None:
+        super().__init__("FORBIDDEN", message, 403)
+
+
+class TooManyRequestsError(AppError):
+    def __init__(self, message: str = "请求过于频繁，请稍后再试") -> None:
+        super().__init__("RATE_LIMITED", message, 429)
+
+
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
-    content: dict = {"code": exc.code, "message": exc.message}
-    if exc.data:
-        content.update(exc.data)
-    return JSONResponse(status_code=exc.status_code, content=content)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.code, "message": exc.message},
+    )
 
 
 async def http_error_handler(_: Request, exc: HTTPException) -> JSONResponse:

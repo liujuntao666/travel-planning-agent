@@ -29,18 +29,28 @@ DROP TABLE IF EXISTS `t_trip_version`;
 DROP TABLE IF EXISTS `t_trip`;
 DROP TABLE IF EXISTS `t_requirement_slot`;
 DROP TABLE IF EXISTS `t_message`;
+DROP TABLE IF EXISTS `t_user_role`;
+DROP TABLE IF EXISTS `t_role_permission`;
+DROP TABLE IF EXISTS `t_role_menu`;
+DROP TABLE IF EXISTS `t_permission`;
+DROP TABLE IF EXISTS `t_menu`;
+DROP TABLE IF EXISTS `t_role`;
 DROP TABLE IF EXISTS `t_conversation`;
 DROP TABLE IF EXISTS `t_user`;
 
--- ---------------------------------------------------------------- t_user  游客用户
+-- ---------------------------------------------------------------- t_user  用户
 CREATE TABLE `t_user` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `open_id` varchar(64) NOT NULL COMMENT '微信 / 小程序 / App 的 OpenID',
+  `username` varchar(64) NULL COMMENT '登录账号（账号密码登录方式）',
+  `password_hash` varchar(255) NULL COMMENT 'PBKDF2-SHA256 密码哈希',
+  `email` varchar(128) NULL COMMENT '邮箱（找回密码使用）',
   `nickname` varchar(64) NULL COMMENT '昵称',
   `avatar_url` varchar(255) NULL COMMENT '头像地址',
   `phone` varchar(32) NULL COMMENT '手机号',
   `gender` tinyint NULL DEFAULT 0 COMMENT '性别：0-未知，1-男，2-女',
-  `source` varchar(32) NULL DEFAULT 'APP' COMMENT '接入入口：APP / H5 / MINI',
+  `source` varchar(32) NULL DEFAULT 'APP' COMMENT '接入入口：APP / H5 / MINI / WEB',
+  `role` varchar(16) NOT NULL DEFAULT 'USER' COMMENT '主角色：USER / OPERATOR / ADMIN',
   `status` tinyint NULL DEFAULT 1 COMMENT '状态：1-正常，0-禁用',
   `last_login_at` datetime NULL COMMENT '最近登录时间',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -48,8 +58,10 @@ CREATE TABLE `t_user` (
   `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `AK_t_user_open_id` (`open_id`),
-  KEY `idx_user_phone` (`phone`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='游客用户表：记录 C 端游客的身份与入口信息（FR-01）';
+  UNIQUE KEY `AK_t_user_username` (`username`),
+  KEY `idx_user_phone` (`phone`),
+  KEY `idx_user_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户表：账号密码与 OpenID 多登录方式，关联 RBAC 角色（FR-01）';
 
 -- ---------------------------------------------------------------- t_conversation  会话
 CREATE TABLE `t_conversation` (
@@ -497,6 +509,106 @@ CREATE TABLE `t_content_audit_log` (
   KEY `idx_audit_result_time` (`audit_result`, `audited_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='内容安全审核日志表：生成内容过审与违规拦截留痕（NFR-09）';
 
+-- ---------------------------------------------------------------- t_idempotency_record  幂等请求记录
+CREATE TABLE `t_idempotency_record` (
+  `request_id` varchar(64) NOT NULL COMMENT '唯一请求标识（Idempotency-Key）',
+  `user_id` bigint NULL COMMENT '调用用户ID',
+  `method` varchar(8) NOT NULL COMMENT 'HTTP 方法',
+  `path` varchar(255) NOT NULL COMMENT '请求路径',
+  `request_hash` varchar(64) NOT NULL COMMENT '请求体 SHA-256 摘要，用于识别标识复用',
+  `state` varchar(16) NOT NULL DEFAULT 'PROCESSING' COMMENT '状态：PROCESSING / DONE',
+  `status_code` int NULL COMMENT '首次响应状态码',
+  `response_body` mediumtext NULL COMMENT '首次成功响应体，用于幂等回放',
+  `expires_at` datetime NULL COMMENT '记录过期时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`request_id`),
+  KEY `idx_idem_expire` (`expires_at`),
+  KEY `idx_idem_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='幂等请求记录表：写操作按唯一请求标识去重并回放首次成功响应';
+
+-- ---------------------------------------------------------------- RBAC 角色权限六表
+-- 角色
+CREATE TABLE `t_role` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '角色ID',
+  `role_code` varchar(32) NOT NULL COMMENT '角色编码：ADMIN / USER / 自定义',
+  `role_name` varchar(64) NOT NULL COMMENT '角色名称',
+  `description` varchar(255) NULL COMMENT '角色描述',
+  `status` int NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_t_role_role_code` (`role_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色表：RBAC 授权主体';
+
+-- 菜单
+CREATE TABLE `t_menu` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '菜单ID',
+  `menu_code` varchar(64) NOT NULL COMMENT '菜单编码',
+  `menu_name` varchar(64) NOT NULL COMMENT '菜单名称',
+  `parent_id` bigint NULL COMMENT '父菜单ID，为空表示一级菜单',
+  `path` varchar(128) NULL COMMENT '前端路由路径',
+  `icon` varchar(64) NULL COMMENT '图标标识',
+  `sort_no` int NOT NULL DEFAULT 0 COMMENT '排序号，升序',
+  `status` int NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_t_menu_menu_code` (`menu_code`),
+  KEY `idx_menu_parent` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='菜单表：前端按权限动态渲染的导航项';
+
+-- 接口权限
+CREATE TABLE `t_permission` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '权限ID',
+  `perm_code` varchar(64) NOT NULL COMMENT '权限码：resource:action',
+  `perm_name` varchar(64) NOT NULL COMMENT '权限名称',
+  `resource` varchar(64) NULL COMMENT '资源标识',
+  `method` varchar(16) NULL COMMENT 'HTTP 方法',
+  `api_path` varchar(128) NULL COMMENT '对应接口路径',
+  `description` text NULL COMMENT '权限说明',
+  `status` int NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_t_permission_perm_code` (`perm_code`),
+  KEY `idx_perm_resource` (`resource`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='接口权限表：后端接口级鉴权的权限定义';
+
+-- 角色-菜单
+CREATE TABLE `t_role_menu` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  `menu_id` bigint NOT NULL COMMENT '菜单ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_role_menu` (`role_id`, `menu_id`),
+  KEY `idx_role_menu_menu` (`menu_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色菜单关联表';
+
+-- 角色-权限
+CREATE TABLE `t_role_permission` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  `permission_id` bigint NOT NULL COMMENT '权限ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_role_permission` (`role_id`, `permission_id`),
+  KEY `idx_role_perm_permission` (`permission_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色权限关联表';
+
+-- 用户-角色
+CREATE TABLE `t_user_role` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_user_role` (`user_id`, `role_id`),
+  KEY `idx_user_role_role` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户角色关联表';
+
 -- ---------------------------------------------------------------- 外键约束
 -- 会话属于游客
 ALTER TABLE `t_conversation` ADD CONSTRAINT `FK_t_conversation_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -532,5 +644,14 @@ ALTER TABLE `t_trip_transport` ADD CONSTRAINT `FK_t_trip_transport_t_option` FOR
 ALTER TABLE `t_trip_export` ADD CONSTRAINT `FK_t_trip_export_t_trip` FOREIGN KEY (`trip_id`) REFERENCES `t_trip` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 -- 导出对应版本
 ALTER TABLE `t_trip_export` ADD CONSTRAINT `FK_t_trip_export_t_trip_version` FOREIGN KEY (`trip_version_id`) REFERENCES `t_trip_version` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- RBAC 角色菜单
+ALTER TABLE `t_role_menu` ADD CONSTRAINT `FK_t_role_menu_t_role` FOREIGN KEY (`role_id`) REFERENCES `t_role` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `t_role_menu` ADD CONSTRAINT `FK_t_role_menu_t_menu` FOREIGN KEY (`menu_id`) REFERENCES `t_menu` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- RBAC 角色权限
+ALTER TABLE `t_role_permission` ADD CONSTRAINT `FK_t_role_permission_t_role` FOREIGN KEY (`role_id`) REFERENCES `t_role` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `t_role_permission` ADD CONSTRAINT `FK_t_role_permission_t_permission` FOREIGN KEY (`permission_id`) REFERENCES `t_permission` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- RBAC 用户角色
+ALTER TABLE `t_user_role` ADD CONSTRAINT `FK_t_user_role_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `t_user_role` ADD CONSTRAINT `FK_t_user_role_t_role` FOREIGN KEY (`role_id`) REFERENCES `t_role` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 SET FOREIGN_KEY_CHECKS = 1;

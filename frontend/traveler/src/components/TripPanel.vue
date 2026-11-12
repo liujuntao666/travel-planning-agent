@@ -263,7 +263,7 @@ function exportStatus(record: ExportRecord): string {
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: var(--panel);
+  background: var(--bg);
 }
 
 .trip-empty {
@@ -274,15 +274,22 @@ function exportStatus(record: ExportRecord): string {
 }
 
 .empty-illustration {
+  position: relative;
   width: 96px;
   height: 96px;
   margin: 0 auto 18px;
   border-radius: 28px;
-  background:
-    radial-gradient(circle at 30% 30%, #99f6e4 0, transparent 55%),
-    radial-gradient(circle at 72% 70%, #fde68a 0, transparent 50%),
-    #eef7f5;
+  background: var(--accent-soft);
   border: 1px solid var(--line);
+}
+
+.empty-illustration::after {
+  content: '';
+  position: absolute;
+  inset: 26px;
+  border-radius: 50%;
+  border: 2px dashed var(--accent);
+  opacity: 0.55;
 }
 
 .trip-empty h2 {

@@ -1,0 +1,6 @@
+# 本机 8000 端口被打印服务 CLodopPrint32 占用，后端改映射到 8001
+# 仅在本地生效，删除本文件即恢复默认 8000
+services:
+  backend:
+    ports: !override
+      - "8001:8000"

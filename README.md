@@ -35,9 +35,10 @@ travel-planning-agent/
 │  └─ tests/               # 槽位、意图、端到端 API 测试
 ├─ deploy/                 # docker-compose、.env.example、MySQL 初始化脚本
 ├─ eval/                   # 评测集与回归脚本（NFR-01/02/07）
-├─ docs/                   # 需求基线、接口契约、设计文档
 └─ .github/                # CI（后端 ruff + pytest、前端 build）
 ```
+
+接口文档、OpenAPI 描述与建表 SQL 等交付物不参与运行，已移至项目外一级目录 `../travel-planning-agent-artifacts`。
 
 ## 快速开始（Docker，推荐）
 
@@ -48,8 +49,8 @@ docker compose up -d --build
 ```
 
 - 前端：http://localhost:8080
-- 接口文档：http://localhost:8000/docs
-- 健康检查：http://localhost:8000/health
+- 接口文档：http://localhost:8001/docs
+- 健康检查：http://localhost:8001/health
 - MySQL 首次启动自动执行 `deploy/mysql/init/01_schema.sql` 与 `02_init_data.sql`
 
 ## 本地开发
@@ -61,7 +62,7 @@ cd deploy && docker compose up -d mysql
 # 2. 后端
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 
 # 3. 前端
 cd frontend/traveler
@@ -69,7 +70,7 @@ npm install
 npm run dev
 ```
 
-前端默认请求 `http://127.0.0.1:8000/api/v1`，可通过 `VITE_API_BASE` 覆盖；容器内构建默认 `/api/v1`，由 Nginx 反向代理到后端。
+前端默认请求 `http://127.0.0.1:8001/api/v1`，可通过 `VITE_API_BASE` 覆盖；容器内构建默认 `/api/v1`，由 Nginx 反向代理到后端。
 
 ## 核心接口
 

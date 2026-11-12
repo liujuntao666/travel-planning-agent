@@ -1,27 +1,26 @@
 import json
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.agent_core.dialog import conversation_detail, handle_message
+from app.common.auth import ensure_owner, get_current_user, get_owned_conversation
 from app.common.db import get_db
 from app.common.errors import NotFoundError
+from app.common.pagination import PageParams, paginate
+from app.common.rbac import require_permission
 from app.models import Conversation, User
 from app.schemas.requests import ChatIn
 
-router = APIRouter(prefix="/conversations", tags=["conversations"])
+READ_PERMISSION = [Depends(require_permission("conversation:read"))]
+WRITE_PERMISSION = [Depends(require_permission("conversation:write"))]
 
-
-def _get_conversation(db: Session, conversation_id: int) -> Conversation:
-    conversation = db.scalar(
-        select(Conversation).where(Conversation.id == conversation_id, Conversation.deleted == 0)
-    )
-    if not conversation:
-        raise NotFoundError("会话不存在")
-    return conversation
+router = APIRouter(
+    prefix="/conversations", tags=["conversations"], dependencies=READ_PERMISSION
+)
 
 
 def _get_user(db: Session, conversation: Conversation) -> User:
@@ -32,13 +31,36 @@ def _get_user(db: Session, conversation: Conversation) -> User:
 
 
 @router.get("")
-def list_conversations(user_id: int, db: Session = Depends(get_db)) -> list[dict]:
-    rows = db.scalars(
-        select(Conversation).where(
-            Conversation.user_id == user_id, Conversation.deleted == 0
-        ).order_by(Conversation.id.desc()).limit(50)
-    ).all()
-    return [
+def list_conversations(
+    user_id: int | None = Query(None, ge=1),
+    keyword: str | None = Query(None, max_length=64),
+    last_intent: str | None = Query(None, max_length=32),
+    page_params: PageParams = Depends(),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+) -> dict:
+    target_user_id = user_id or current.id
+    ensure_owner(current, target_user_id)
+    stmt = select(Conversation).where(
+        Conversation.user_id == target_user_id, Conversation.deleted == 0
+    )
+    if keyword:
+        stmt = stmt.where(or_(
+            Conversation.title.contains(keyword),
+            Conversation.last_intent.contains(keyword),
+        ))
+    if last_intent:
+        stmt = stmt.where(Conversation.last_intent == last_intent)
+    page = paginate(
+        db, stmt, page_params,
+        allowed_sort={
+            "id": Conversation.id,
+            "last_message_at": Conversation.last_message_at,
+            "message_count": Conversation.message_count,
+        },
+        default_sort="id:desc",
+    )
+    page["items"] = [
         {
             "id": c.id,
             "title": c.title,
@@ -47,18 +69,28 @@ def list_conversations(user_id: int, db: Session = Depends(get_db)) -> list[dict
             "message_count": c.message_count,
             "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
         }
-        for c in rows
+        for c in page["items"]
     ]
+    return page
 
 
 @router.get("/{conversation_id}")
-def detail(conversation_id: int, db: Session = Depends(get_db)) -> dict:
-    return conversation_detail(db, _get_conversation(db, conversation_id))
+def detail(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+) -> dict:
+    return conversation_detail(db, get_owned_conversation(db, conversation_id, current))
 
 
 @router.post("/{conversation_id}/messages")
-def send_message(conversation_id: int, payload: ChatIn, db: Session = Depends(get_db)) -> dict:
-    conversation = _get_conversation(db, conversation_id)
+def send_message(
+    conversation_id: int,
+    payload: ChatIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+) -> dict:
+    conversation = get_owned_conversation(db, conversation_id, current)
     user = _get_user(db, conversation)
     result = handle_message(db, conversation, user, payload.content, payload.start_date)
     db.commit()
@@ -69,9 +101,14 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-@router.post("/{conversation_id}/messages/stream")
-def send_message_stream(conversation_id: int, payload: ChatIn, db: Session = Depends(get_db)):
-    conversation = _get_conversation(db, conversation_id)
+@router.post("/{conversation_id}/messages/stream", dependencies=WRITE_PERMISSION)
+def send_message_stream(
+    conversation_id: int,
+    payload: ChatIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    conversation = get_owned_conversation(db, conversation_id, current)
     user = _get_user(db, conversation)
 
     def event_stream():
