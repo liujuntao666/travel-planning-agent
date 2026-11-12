@@ -11,6 +11,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ---------------------------------------------------------------- 清理旧表
+DROP TABLE IF EXISTS `t_idempotency_record`;
 DROP TABLE IF EXISTS `t_content_audit_log`;
 DROP TABLE IF EXISTS `t_trip_style`;
 DROP TABLE IF EXISTS `t_travel_tips`;
