@@ -36,6 +36,8 @@ app = FastAPI(
 )
 
 app.add_middleware(IdempotencyMiddleware)
+# 注册顺序决定执行顺序：后注册的在外层，CORS 必须最外层以覆盖 401 响应
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.cors_origins.split(",")] if settings.cors_origins != "*" else ["*"],
