@@ -15,7 +15,8 @@ const roleCode = ref('')
 const status = ref('')
 const sort = ref('id:desc')
 const loading = ref(false)
-const error = ref('')
+const pageError = ref('')
+const assignError = ref('')
 
 const roleOptions = ref<Role[]>([])
 const assignOpen = ref(false)
@@ -31,7 +32,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.v
 
 async function load() {
   loading.value = true
-  error.value = ''
+  pageError.value = ''
   try {
     const data = await request<PageResult<AdminUser>>('/admin/users', {
       params: {
@@ -46,7 +47,7 @@ async function load() {
     rows.value = data.items
     total.value = data.total
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '用户列表加载失败'
+    pageError.value = err instanceof Error ? err.message : '用户列表加载失败'
   } finally {
     loading.value = false
   }
@@ -67,7 +68,7 @@ function turnPage(delta: number) {
 async function openAssign(user: AdminUser) {
   assignUser.value = user
   selectedRoleIds.value = user.roles.map((role) => role.id)
-  error.value = ''
+  pageError.value = ''
   try {
     const data = await request<PageResult<Role>>('/admin/roles', {
       params: { page: 1, page_size: 100, status: 1, sort: 'id:asc' },
@@ -75,14 +76,14 @@ async function openAssign(user: AdminUser) {
     roleOptions.value = data.items
     assignOpen.value = true
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '角色列表加载失败'
+    pageError.value = err instanceof Error ? err.message : '角色列表加载失败'
   }
 }
 
 async function saveAssign() {
   if (!assignUser.value) return
   assignBusy.value = true
-  error.value = ''
+  assignError.value = ''
   try {
     await request(`/admin/users/${assignUser.value.id}/roles`, {
       method: 'PUT',
@@ -91,7 +92,7 @@ async function saveAssign() {
     assignOpen.value = false
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '授权失败'
+    assignError.value = err instanceof Error ? err.message : '授权失败'
   } finally {
     assignBusy.value = false
   }
@@ -100,12 +101,12 @@ async function saveAssign() {
 async function openAuthz(user: AdminUser) {
   authzUser.value = user
   authz.value = null
-  error.value = ''
+  pageError.value = ''
   try {
     authz.value = await request<UserAuthz>(`/admin/users/${user.id}/authz`)
     authzOpen.value = true
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '权限快照加载失败'
+    pageError.value = err instanceof Error ? err.message : '权限快照加载失败'
   }
 }
 
@@ -121,7 +122,7 @@ onMounted(load)
       </div>
     </header>
 
-    <div v-if="error" class="alert error">{{ error }}</div>
+    <div v-if="pageError" class="alert error">{{ pageError }}</div>
 
     <div class="toolbar">
       <input
@@ -223,6 +224,7 @@ onMounted(load)
       subtitle="保存后该用户所有在线会话会被撤销，需要重新登录"
       @close="assignOpen = false"
     >
+      <div v-if="assignError" class="alert error">{{ assignError }}</div>
       <div class="checkbox-list">
         <label v-for="role in roleOptions" :key="role.id" class="checkbox-row">
           <input v-model="selectedRoleIds" type="checkbox" :value="role.id" />

@@ -1,0 +1,38 @@
+# Caddy 反向代理：自动申请并续期 Let's Encrypt 证书
+# 域名通过 deploy/.env 中的 APP_DOMAIN / ADMIN_DOMAIN 注入
+# 没有域名时可把域名写成 ":443"，并在站点配置里加 tls internal 使用自签名证书
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000 {
+			flush_interval -1
+		}
+	}
+	handle /static/* {
+		reverse_proxy backend:8000
+	}
+	handle /health {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:80
+	}
+}
+
+{$ADMIN_DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000 {
+			flush_interval -1
+		}
+	}
+	handle /health {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy admin-frontend:80
+	}
+}

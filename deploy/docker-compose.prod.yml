@@ -1,0 +1,39 @@
+# 生产部署叠加文件：内部服务不再对外暴露端口，统一由 Caddy 做 TLS 终止
+# 启动：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  mysql:
+    ports: !override []
+    restart: unless-stopped
+  redis:
+    ports: !override []
+    restart: unless-stopped
+  backend:
+    ports: !override []
+    restart: unless-stopped
+  frontend:
+    ports: !override []
+    restart: unless-stopped
+  admin-frontend:
+    ports: !override []
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    container_name: travel-caddy
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+      - admin-frontend
+
+volumes:
+  caddy-data:
+  caddy-config:

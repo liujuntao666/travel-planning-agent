@@ -15,7 +15,8 @@ const resource = ref('')
 const status = ref('')
 const sort = ref('id:asc')
 const loading = ref(false)
-const error = ref('')
+const pageError = ref('')
+const formError = ref('')
 
 const formOpen = ref(false)
 const editing = ref<PermissionItem | null>(null)
@@ -33,7 +34,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.v
 
 async function load() {
   loading.value = true
-  error.value = ''
+  pageError.value = ''
   try {
     const data = await request<PageResult<PermissionItem>>('/admin/permissions', {
       params: {
@@ -48,7 +49,7 @@ async function load() {
     rows.value = data.items
     total.value = data.total
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '接口权限加载失败'
+    pageError.value = err instanceof Error ? err.message : '接口权限加载失败'
   } finally {
     loading.value = false
   }
@@ -77,6 +78,7 @@ function openCreate() {
     description: '',
     status: 1,
   })
+  formError.value = ''
   formOpen.value = true
 }
 
@@ -91,12 +93,13 @@ function openEdit(item: PermissionItem) {
     description: item.description || '',
     status: item.status,
   })
+  formError.value = ''
   formOpen.value = true
 }
 
 async function savePermission() {
   if (!form.perm_name.trim()) {
-    error.value = '请填写权限名称'
+    formError.value = '请填写权限名称'
     return
   }
   const payload = {
@@ -119,7 +122,7 @@ async function savePermission() {
     formOpen.value = false
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '保存失败'
+    formError.value = err instanceof Error ? err.message : '保存失败'
   }
 }
 
@@ -129,7 +132,7 @@ async function removePermission(item: PermissionItem) {
     await request(`/admin/permissions/${item.id}`, { method: 'DELETE' })
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '删除失败'
+    pageError.value = err instanceof Error ? err.message : '删除失败'
   }
 }
 
@@ -152,7 +155,7 @@ onMounted(load)
       </button>
     </header>
 
-    <div v-if="error" class="alert error">{{ error }}</div>
+    <div v-if="pageError" class="alert error">{{ pageError }}</div>
 
     <div class="toolbar">
       <input v-model="keyword" class="input" placeholder="搜索编码 / 名称 / 路径" @keyup.enter="search" />
@@ -239,6 +242,7 @@ onMounted(load)
       subtitle="权限编码创建后不可修改，建议与接口语义保持一致"
       @close="formOpen = false"
     >
+      <div v-if="formError" class="alert error">{{ formError }}</div>
       <div class="form-stack">
         <label>
           权限编码

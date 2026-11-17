@@ -58,6 +58,17 @@ FIELD_LABELS = {
     "captcha_id": "验证码标识",
     "captcha_code": "图形验证码",
     "reset_token": "重置凭证",
+    "role_code": "角色编码",
+    "role_name": "角色名称",
+    "menu_code": "菜单编码",
+    "menu_name": "菜单名称",
+    "perm_code": "权限编码",
+    "perm_name": "权限名称",
+    "resource": "资源分组",
+    "method": "请求方法",
+    "api_path": "接口路径",
+    "parent_id": "上级菜单",
+    "sort_no": "排序值",
 }
 
 FIELD_HINTS = {
@@ -66,6 +77,10 @@ FIELD_HINTS = {
     "new_password": "新密码需 8-64 位且同时包含字母与数字",
     "email": "请输入正确的邮箱地址，例如 name@example.com",
     "phone": "手机号需为 6-20 位数字，可带 + 前缀",
+    "role_code": "角色编码需 2-32 位，以大写字母开头，只能包含大写字母、数字和下划线，例如 OPERATOR、OPS_01",
+    "menu_code": "菜单编码需 2-64 位，以小写字母开头，只能包含小写字母、数字和下划线，例如 admin_roles",
+    "perm_code": "权限编码需 2-64 位，以小写字母开头，只能包含小写字母、数字、冒号、下划线和短横线，例如 rbac:role:create",
+    "method": "请求方法需为 3-8 位大写字母，例如 GET、POST、PATCH",
 }
 
 

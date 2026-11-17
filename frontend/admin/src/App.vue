@@ -20,12 +20,16 @@ interface MenuGroup {
   children: MenuNode[]
 }
 
+const consoleMenus = computed(() =>
+  (auth.me?.menus || []).filter((menu) => (menu.path || '').startsWith('/admin')),
+)
+
 const groups = computed<MenuGroup[]>(() =>
-  (auth.me?.menus || []).map((root) => ({ root, children: root.children })),
+  consoleMenus.value.map((root) => ({ root, children: root.children })),
 )
 
 const activeTitle = computed(() => {
-  const found = findMenu(auth.me?.menus || [], activePath.value)
+  const found = findMenu(consoleMenus.value, activePath.value)
   return found?.menu_name || '控制台'
 })
 
@@ -70,7 +74,7 @@ async function handleRefresh() {
   refreshing.value = true
   try {
     await refreshMe()
-    if (!findMenu(auth.me?.menus || [], activePath.value)) {
+    if (!findMenu(consoleMenus.value, activePath.value)) {
       activePath.value = pickDefaultPath()
     }
     showToast('权限快照已刷新')

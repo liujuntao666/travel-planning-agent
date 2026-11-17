@@ -14,7 +14,9 @@ const keyword = ref('')
 const status = ref<string>('')
 const sort = ref('id:asc')
 const loading = ref(false)
-const error = ref('')
+const pageError = ref('')
+const formError = ref('')
+const grantError = ref('')
 
 const formOpen = ref(false)
 const editing = ref<Role | null>(null)
@@ -49,7 +51,7 @@ const permissionGroups = computed(() => {
 
 async function load() {
   loading.value = true
-  error.value = ''
+  pageError.value = ''
   try {
     const data = await request<PageResult<Role>>('/admin/roles', {
       params: {
@@ -63,7 +65,7 @@ async function load() {
     rows.value = data.items
     total.value = data.total
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '角色列表加载失败'
+    pageError.value = err instanceof Error ? err.message : '角色列表加载失败'
   } finally {
     loading.value = false
   }
@@ -87,6 +89,7 @@ function openCreate() {
   form.role_name = ''
   form.description = ''
   form.status = 1
+  formError.value = ''
   formOpen.value = true
 }
 
@@ -96,12 +99,17 @@ function openEdit(role: Role) {
   form.role_name = role.role_name
   form.description = role.description || ''
   form.status = role.status
+  formError.value = ''
   formOpen.value = true
 }
 
 async function saveRole() {
   if (!form.role_name.trim()) {
-    error.value = '请填写角色名称'
+    formError.value = '请填写角色名称'
+    return
+  }
+  if (!form.role_code.trim()) {
+    formError.value = '请填写角色编码'
     return
   }
   try {
@@ -128,7 +136,7 @@ async function saveRole() {
     formOpen.value = false
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '保存失败'
+    formError.value = err instanceof Error ? err.message : '保存失败'
   }
 }
 
@@ -138,14 +146,14 @@ async function removeRole(role: Role) {
     await request(`/admin/roles/${role.id}`, { method: 'DELETE' })
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '删除失败'
+    pageError.value = err instanceof Error ? err.message : '删除失败'
   }
 }
 
 async function openGrant(role: Role) {
   grantRole.value = role
   grantBusy.value = true
-  error.value = ''
+  pageError.value = ''
   try {
     const [grants, menus, permissions] = await Promise.all([
       request<RoleGrants>(`/admin/roles/${role.id}/grants`),
@@ -160,7 +168,7 @@ async function openGrant(role: Role) {
     allPermissions.value = permissions.items
     grantOpen.value = true
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '授权信息加载失败'
+    pageError.value = err instanceof Error ? err.message : '授权信息加载失败'
   } finally {
     grantBusy.value = false
   }
@@ -169,7 +177,7 @@ async function openGrant(role: Role) {
 async function saveGrants() {
   if (!grantRole.value) return
   grantBusy.value = true
-  error.value = ''
+  grantError.value = ''
   try {
     await request(`/admin/roles/${grantRole.value.id}/menus`, {
       method: 'PUT',
@@ -181,7 +189,7 @@ async function saveGrants() {
     })
     grantOpen.value = false
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '授权保存失败'
+    grantError.value = err instanceof Error ? err.message : '授权保存失败'
   } finally {
     grantBusy.value = false
   }
@@ -202,7 +210,7 @@ onMounted(load)
       </button>
     </header>
 
-    <div v-if="error" class="alert error">{{ error }}</div>
+    <div v-if="pageError" class="alert error">{{ pageError }}</div>
 
     <div class="toolbar">
       <input
@@ -299,6 +307,7 @@ onMounted(load)
       subtitle="角色编码创建后不可修改，内置 ADMIN / USER 角色受保护"
       @close="formOpen = false"
     >
+      <div v-if="formError" class="alert error">{{ formError }}</div>
       <div class="form-stack">
         <label>
           角色编码
@@ -338,6 +347,7 @@ onMounted(load)
       wide
       @close="grantOpen = false"
     >
+      <div v-if="grantError" class="alert error">{{ grantError }}</div>
       <div class="grant-grid">
         <section>
           <h4>菜单权限</h4>

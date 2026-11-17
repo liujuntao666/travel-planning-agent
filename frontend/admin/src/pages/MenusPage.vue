@@ -15,7 +15,8 @@ const keyword = ref('')
 const status = ref('')
 const sort = ref('sort_no:asc')
 const loading = ref(false)
-const error = ref('')
+const pageError = ref('')
+const formError = ref('')
 
 const formOpen = ref(false)
 const editing = ref<MenuItem | null>(null)
@@ -39,7 +40,7 @@ const parentNames = computed(() => {
 
 async function load() {
   loading.value = true
-  error.value = ''
+  pageError.value = ''
   try {
     const data = await request<PageResult<MenuItem>>('/admin/menus', {
       params: {
@@ -53,7 +54,7 @@ async function load() {
     rows.value = data.items
     total.value = data.total
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '菜单列表加载失败'
+    pageError.value = err instanceof Error ? err.message : '菜单列表加载失败'
   } finally {
     loading.value = false
   }
@@ -94,6 +95,7 @@ async function openCreate() {
     status: 1,
   })
   await loadParents()
+  formError.value = ''
   formOpen.value = true
 }
 
@@ -109,12 +111,13 @@ async function openEdit(menu: MenuItem) {
     status: menu.status,
   })
   await loadParents()
+  formError.value = ''
   formOpen.value = true
 }
 
 async function saveMenu() {
   if (!form.menu_name.trim()) {
-    error.value = '请填写菜单名称'
+    formError.value = '请填写菜单名称'
     return
   }
   const payload = {
@@ -137,7 +140,7 @@ async function saveMenu() {
     formOpen.value = false
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '保存失败'
+    formError.value = err instanceof Error ? err.message : '保存失败'
   }
 }
 
@@ -147,7 +150,7 @@ async function removeMenu(menu: MenuItem) {
     await request(`/admin/menus/${menu.id}`, { method: 'DELETE' })
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '删除失败'
+    pageError.value = err instanceof Error ? err.message : '删除失败'
   }
 }
 
@@ -166,7 +169,7 @@ onMounted(load)
       </button>
     </header>
 
-    <div v-if="error" class="alert error">{{ error }}</div>
+    <div v-if="pageError" class="alert error">{{ pageError }}</div>
 
     <div class="toolbar">
       <input v-model="keyword" class="input" placeholder="搜索编码或名称" @keyup.enter="search" />
@@ -258,6 +261,7 @@ onMounted(load)
       subtitle="菜单编码创建后不可修改"
       @close="formOpen = false"
     >
+      <div v-if="formError" class="alert error">{{ formError }}</div>
       <div class="form-stack">
         <label>
           菜单编码
