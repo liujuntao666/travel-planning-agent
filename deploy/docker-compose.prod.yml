@@ -30,6 +30,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      # 与 backend 共享导出目录，只读挂载供 file_server 直出
+      - export-data:/srv/exports:ro
     depends_on:
       - frontend
       - admin-frontend

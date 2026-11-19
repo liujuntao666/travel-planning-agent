@@ -10,8 +10,10 @@
 			flush_interval -1
 		}
 	}
-	handle /static/* {
-		reverse_proxy backend:8000
+	# 导出文件由 Caddy 直接读卷，不经过 Python，支持 Range 断点续传
+	handle_path /static/* {
+		root * /srv/exports
+		file_server
 	}
 	handle /health {
 		reverse_proxy backend:8000
