@@ -148,3 +148,13 @@ CI 在 push / PR 到 `main`、`develop` 时自动执行以上检查。
 所有配置通过环境变量覆盖（见 `deploy/.env.example`）：`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`、`DATABASE_URL`、`TOOL_TIMEOUT_MS`、`TOOL_OFFLINE`、`CORS_ORIGINS` 等。
 
 > 不要把真实密钥写入仓库；`.env` 已被 `.gitignore` 排除。
+
+## 本地访问地址
+
+| 服务 | 地址 |
+|---|---|
+| C 端旅行规划 | http://localhost:5173 |
+| 管理后台 | http://localhost:5174 |
+| 后端 API 文档 | http://127.0.0.1:8001/docs |
+
+演示账号：`admin / Admin@123456`、`traveler / Traveler@123456`。
