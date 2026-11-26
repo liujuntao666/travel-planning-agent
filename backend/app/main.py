@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.agent_core.llm import llm_client
-from app.api import admin, auth, conversations, resources, trips, users
+from app.api import admin, auth, chat, conversations, profile, resources, trips, users
 from app.common.auth_middleware import AuthMiddleware
 from app.common.config import settings
 from app.common.db import engine, init_db
@@ -132,6 +132,8 @@ app.include_router(users.router, prefix=settings.api_prefix)
 app.include_router(conversations.router, prefix=settings.api_prefix)
 app.include_router(trips.router, prefix=settings.api_prefix)
 app.include_router(resources.router, prefix=settings.api_prefix)
+app.include_router(profile.router, prefix=settings.api_prefix)
+app.include_router(chat.router, prefix=settings.api_prefix)
 
 
 @app.get("/health")

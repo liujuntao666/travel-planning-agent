@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.chat import ChatMessage, ChatThread
 from app.models.idempotency import IdempotencyRecord
 from app.models.log import ContentAuditLog, ToolCallLog
 from app.models.rbac import (
@@ -9,6 +10,7 @@ from app.models.rbac import (
     RolePermission,
     UserRole,
 )
+from app.models.profile import TagDict, UserEvent, UserTag
 from app.models.resource import (
     Hotel,
     Poi,
@@ -31,6 +33,8 @@ from app.models.user import Conversation, Message, RequirementSlot, User
 
 __all__ = [
     "Base",
+    "ChatThread",
+    "ChatMessage",
     "IdempotencyRecord",
     "Role",
     "Menu",
@@ -58,4 +62,7 @@ __all__ = [
     "TripStyle",
     "ToolCallLog",
     "ContentAuditLog",
+    "UserEvent",
+    "TagDict",
+    "UserTag",
 ]

@@ -53,6 +53,7 @@ export interface AuthSession {
   permissions: string[]
   menus: unknown[]
   is_admin: boolean
+  session?: { count: number; backend: string }
 }
 
 export interface PasswordLoginPayload {
@@ -66,6 +67,17 @@ export interface RegisterPayload extends PasswordLoginPayload {
   nickname?: string | null
   email?: string | null
   phone?: string | null
+}
+
+export interface UserTagItem {
+  tag_code: string
+  tag_name: string
+  category: string
+  description: string | null
+  score: number
+  confidence: number
+  source: string
+  updated_at: string | null
 }
 
 export const api = {
@@ -94,6 +106,18 @@ export const api = {
 
   me: () => request<AuthSession>('/auth/me'),
 
+  updateProfile: (payload: { nickname: string; email: string; phone: string }) =>
+    request<{ message: string; user: User }>('/auth/profile', {
+      method: 'PATCH',
+      data: payload,
+    }),
+
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<{ message: string; revoked_sessions: number }>('/auth/password/change', {
+      method: 'POST',
+      data: { old_password: oldPassword, new_password: newPassword },
+    }),
+
   forgotPassword: (account: string, captchaId: string, captchaCode: string) =>
     request<{ message: string; expires_in: number; reset_token: string | null }>(
       '/auth/password/forgot',
@@ -105,6 +129,16 @@ export const api = {
       method: 'POST',
       data: { reset_token: resetToken, new_password: newPassword },
     }),
+
+  myTags: () => request<{ items: UserTagItem[]; total: number }>('/profile/tags'),
+
+  refreshTags: () =>
+    request<{ message: string; items: UserTagItem[]; total: number }>('/profile/tags/refresh', {
+      method: 'POST',
+    }),
+
+  clearTags: () =>
+    request<{ message: string; removed: number }>('/profile/tags', { method: 'DELETE' }),
 
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
 

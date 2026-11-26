@@ -75,5 +75,19 @@ def revoke_user_sessions(user_id: int) -> int:
     return count
 
 
+def revoke_other_sessions(user_id: int, keep_token: str) -> int:
+    """吊销除当前令牌以外的全部会话，用于改密后让其他设备下线。"""
+    client = get_redis()
+    keep = token_digest(keep_token)
+    digests = client.smembers(f"{USER_SESSIONS_PREFIX}{user_id}")
+    count = 0
+    for digest in digests:
+        if digest == keep:
+            continue
+        count += client.delete(f"{SESSION_PREFIX}{digest}")
+        client.srem(f"{USER_SESSIONS_PREFIX}{user_id}", digest)
+    return count
+
+
 def session_count(user_id: int) -> int:
     return len(get_redis().smembers(f"{USER_SESSIONS_PREFIX}{user_id}"))

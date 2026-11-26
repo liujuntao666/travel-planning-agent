@@ -20,6 +20,7 @@ from app.itinerary.service import (
     update_item,
 )
 from app.models import TripExport, TripVersion, User
+from app.profile.service import record_event
 from app.schemas.requests import ExportIn, HotelReplaceIn, ItemAddIn, ItemUpdateIn, MoveIn
 
 WRITE_PERMISSION = [Depends(require_permission("trip:write"))]
@@ -102,6 +103,7 @@ def activate(
     current: User = Depends(get_current_user),
 ) -> dict:
     result = activate_version(db, get_owned_trip(db, trip_id, current), version_id)
+    record_event(db, current.id, "rollback_version", "trip_version", version_id)
     db.commit()
     return result
 
@@ -117,6 +119,7 @@ def patch_item(
     result = update_item(
         db, get_owned_trip(db, trip_id, current), item_id, payload.model_dump(exclude_none=True)
     )
+    record_event(db, current.id, "adjust_item", "trip", trip_id)
     db.commit()
     return result
 
@@ -129,6 +132,7 @@ def remove_item(
     current: User = Depends(get_current_user),
 ) -> dict:
     result = delete_item(db, get_owned_trip(db, trip_id, current), item_id)
+    record_event(db, current.id, "adjust_item", "trip", trip_id)
     db.commit()
     return result
 
@@ -142,6 +146,7 @@ def move(
     current: User = Depends(get_current_user),
 ) -> dict:
     result = move_item(db, get_owned_trip(db, trip_id, current), item_id, payload.direction)
+    record_event(db, current.id, "adjust_item", "trip", trip_id)
     db.commit()
     return result
 
@@ -154,6 +159,7 @@ def create_item(
     current: User = Depends(get_current_user),
 ) -> dict:
     result = add_item(db, get_owned_trip(db, trip_id, current), payload.model_dump())
+    record_event(db, current.id, "adjust_item", "trip", trip_id)
     db.commit()
     return result
 
@@ -169,6 +175,7 @@ def replace(
     result = replace_hotel(
         db, get_owned_trip(db, trip_id, current), lodging_id, payload.hotel_id
     )
+    record_event(db, current.id, "adjust_item", "trip", trip_id)
     db.commit()
     return result
 
@@ -180,6 +187,7 @@ def ai_replan(
     current: User = Depends(get_current_user),
 ) -> dict:
     result = replan(db, get_owned_trip(db, trip_id, current))
+    record_event(db, current.id, "replan", "trip", trip_id)
     db.commit()
     return result
 
@@ -196,6 +204,7 @@ def create_export(
 ) -> dict:
     trip = get_owned_trip(db, trip_id, current)
     record = generate_export(db, trip, payload.format)
+    record_event(db, current.id, "export", "trip", trip.id)
     db.commit()
     return {
         "id": record.id,

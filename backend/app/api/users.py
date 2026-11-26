@@ -12,6 +12,7 @@ from app.common.ratelimit import enforce
 from app.common.rbac import load_user_authz
 from app.common.security import issue_token
 from app.models import Conversation, User
+from app.profile.service import record_event
 from app.schemas.requests import ConversationIn, LoginIn
 
 router = APIRouter(tags=["users"])
@@ -103,5 +104,6 @@ def create_conversation(
     if not user:
         raise NotFoundError("用户不存在")
     conversation = _create(db, user, payload.title)
+    record_event(db, current.id, "new_conversation", "conversation", conversation.id)
     db.commit()
     return {"id": conversation.id, "user_id": conversation.user_id, "title": conversation.title}

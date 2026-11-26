@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.common.auth import get_current_user, bearer_scheme
 from app.common.auth_session import (
     create_session,
+    revoke_other_sessions,
     revoke_session,
     revoke_user_sessions,
     session_count,
@@ -35,7 +36,9 @@ from app.common.security import hash_password, issue_token, token_digest, verify
 from app.models import Role, User, UserRole
 from app.schemas.auth import (
     ForgotPasswordIn,
+    PasswordChangeIn,
     PasswordLoginIn,
+    ProfileUpdateIn,
     RegisterIn,
     ResetPasswordIn,
 )
@@ -201,6 +204,68 @@ def me(current: User = Depends(get_current_user), db: Session = Depends(get_db))
             "backend": redis_backend(),
         },
     }
+
+
+@router.patch("/profile")
+def update_profile(
+    payload: ProfileUpdateIn,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    provided = payload.model_fields_set
+
+    if "nickname" in provided:
+        if not payload.nickname:
+            raise ValidationError("昵称不能为空")
+        current.nickname = payload.nickname
+
+    if "email" in provided:
+        if payload.email:
+            duplicated = db.scalar(
+                select(User).where(
+                    User.email == payload.email,
+                    User.id != current.id,
+                    User.deleted == 0,
+                )
+            )
+            if duplicated:
+                raise ConflictError("该邮箱已被其他账号使用")
+        current.email = payload.email
+
+    if "phone" in provided:
+        current.phone = payload.phone
+
+    db.commit()
+    db.refresh(current)
+    return {"message": "个人资料已更新", "user": _user_dict(current)}
+
+
+@router.post("/password/change")
+def change_password(
+    payload: PasswordChangeIn,
+    request: Request,
+    current: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> dict:
+    ip = client_ip(request)
+    enforce(f"pwd:change:{current.id}", 5, 300, "修改密码过于频繁，请稍后再试")
+
+    if not current.password_hash or not verify_password(payload.old_password, current.password_hash):
+        raise ValidationError("原密码不正确")
+    if payload.old_password == payload.new_password:
+        raise ValidationError("新密码不能与原密码相同")
+
+    current.password_hash = hash_password(payload.new_password)
+    db.commit()
+
+    revoked = 0
+    if credentials and credentials.credentials:
+        revoked = revoke_other_sessions(current.id, credentials.credentials)
+    clear_login_failures(current.username or "", ip)
+
+    message = "密码已更新，其他设备已退出登录" if revoked else "密码已更新"
+    return {"message": message, "revoked_sessions": revoked}
 
 
 @router.post("/password/forgot")

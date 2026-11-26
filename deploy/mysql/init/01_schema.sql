@@ -610,6 +610,52 @@ CREATE TABLE `t_user_role` (
   KEY `idx_user_role_role` (`role_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户角色关联表';
 
+-- ---------------------------------------------------------------- t_user_event  用户行为事件
+CREATE TABLE `t_user_event` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `event_type` varchar(32) NOT NULL COMMENT '事件类型：new_conversation / replan / rollback_version / export / adjust_item',
+  `target_type` varchar(32) NULL COMMENT '对象类型：conversation / trip / trip_version',
+  `target_id` bigint NULL COMMENT '对象ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发生时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_event_user_time` (`user_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户行为事件表：只记录动作与对象，不保存对话原文';
+
+-- ---------------------------------------------------------------- t_tag_dict  标签字典
+CREATE TABLE `t_tag_dict` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `tag_code` varchar(64) NOT NULL COMMENT '标签编码，全局唯一',
+  `tag_name` varchar(64) NOT NULL COMMENT '标签名称',
+  `category` varchar(32) NOT NULL COMMENT '标签维度：预算 / 行程时长 / 旅行风格 / 活跃度 / 导出偏好',
+  `description` varchar(255) NULL COMMENT '标签说明',
+  `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-停用',
+  `sort_no` int NOT NULL DEFAULT 0 COMMENT '排序号',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_t_tag_dict_code` (`tag_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户标签字典表：规则打标只允许落到字典内的编码';
+
+-- ---------------------------------------------------------------- t_user_tag  用户标签
+CREATE TABLE `t_user_tag` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `tag_code` varchar(64) NOT NULL COMMENT '标签编码，对应 t_tag_dict.tag_code',
+  `score` decimal(5,2) NOT NULL DEFAULT 0 COMMENT '标签得分（0～100）',
+  `confidence` decimal(5,4) NOT NULL DEFAULT 1 COMMENT '置信度（0～1）',
+  `source` varchar(16) NOT NULL DEFAULT 'RULE' COMMENT '标签来源：RULE / LLM / MANUAL',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `AK_t_user_tag_user_code` (`user_id`, `tag_code`),
+  KEY `idx_user_tag_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户标签表：带来源与置信度，支持按用户整体清除';
+
 -- ---------------------------------------------------------------- 外键约束
 -- 会话属于游客
 ALTER TABLE `t_conversation` ADD CONSTRAINT `FK_t_conversation_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -654,5 +700,49 @@ ALTER TABLE `t_role_permission` ADD CONSTRAINT `FK_t_role_permission_t_permissio
 -- RBAC 用户角色
 ALTER TABLE `t_user_role` ADD CONSTRAINT `FK_t_user_role_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `t_user_role` ADD CONSTRAINT `FK_t_user_role_t_role` FOREIGN KEY (`role_id`) REFERENCES `t_role` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- 行为事件属于用户
+ALTER TABLE `t_user_event` ADD CONSTRAINT `FK_t_user_event_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- 标签属于用户
+ALTER TABLE `t_user_tag` ADD CONSTRAINT `FK_t_user_tag_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================================================
+-- 旅行顾问实时聊天：会话与消息
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `t_chat_thread` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint NOT NULL COMMENT '咨询用户ID',
+  `advisor_id` bigint NULL COMMENT '接待顾问ID，未分配为空',
+  `title` varchar(128) NULL DEFAULT '旅行顾问咨询' COMMENT '会话标题',
+  `last_seq` int NOT NULL DEFAULT 0 COMMENT '会话内最大消息序号',
+  `last_message_at` datetime NULL COMMENT '最后一条消息时间',
+  `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态：1-进行中，0-已关闭',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_chat_thread_user` (`user_id`),
+  KEY `idx_chat_thread_advisor` (`advisor_id`),
+  CONSTRAINT `FK_t_chat_thread_t_user` FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FK_t_chat_thread_advisor` FOREIGN KEY (`advisor_id`) REFERENCES `t_user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='实时聊天会话表：用户与旅行顾问的一对一会话';
+
+CREATE TABLE IF NOT EXISTS `t_chat_message` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `thread_id` bigint NOT NULL COMMENT '会话ID',
+  `seq` int NOT NULL COMMENT '会话内单调递增序号',
+  `sender_id` bigint NULL COMMENT '发送者用户ID，系统消息为空',
+  `sender_role` varchar(16) NOT NULL DEFAULT 'USER' COMMENT '发送方角色：USER / ADVISOR / SYSTEM',
+  `content` text NOT NULL COMMENT '消息正文',
+  `client_id` varchar(64) NULL COMMENT '客户端消息唯一标识，用于 ACK 重发去重',
+  `read_flag` tinyint NOT NULL DEFAULT 0 COMMENT '已读标记：0-未读，1-已读',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_thread_seq` (`thread_id`, `seq`),
+  UNIQUE KEY `uk_chat_client_id` (`client_id`),
+  KEY `idx_chat_msg_thread` (`thread_id`, `seq`),
+  CONSTRAINT `FK_t_chat_message_t_thread` FOREIGN KEY (`thread_id`) REFERENCES `t_chat_thread` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='实时聊天消息表：落库后按 seq 游标做增量同步';

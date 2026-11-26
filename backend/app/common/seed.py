@@ -9,9 +9,42 @@ from app.common.config import settings
 from app.common.db import SessionLocal
 from app.common.logging import get_logger
 from app.common.security import hash_password
-from app.models import Menu, Permission, Role, RoleMenu, RolePermission, User, UserRole
+from app.models import (
+    Menu,
+    Permission,
+    Role,
+    RoleMenu,
+    RolePermission,
+    TagDict,
+    User,
+    UserRole,
+)
 
 log = get_logger(__name__)
+
+# 规则打标使用的固定标签字典（category 即标签维度）
+TAGS = [
+    ("BUDGET_ECONOMY", "经济型预算", "预算", "人均预算 1500 元以内", 10),
+    ("BUDGET_COMFORT", "舒适型预算", "预算", "人均预算 1500～3000 元", 11),
+    ("BUDGET_LUXURY", "高端型预算", "预算", "人均预算 3000 元以上", 12),
+    ("LENGTH_SHORT", "短途出行", "行程时长", "偏好 3 天以内", 20),
+    ("LENGTH_MEDIUM", "中程出行", "行程时长", "偏好 4～6 天", 21),
+    ("LENGTH_LONG", "长途出行", "行程时长", "偏好 7 天及以上", 22),
+    ("STYLE_COMMON", "均衡节奏", "旅行风格", "兼顾观景与体验", 30),
+    ("STYLE_RELAX", "休闲节奏", "旅行风格", "每日 1～2 个主点位", 31),
+    ("STYLE_COUPLE", "情侣出游", "旅行风格", "偏好景观、街区与咖啡馆", 32),
+    ("STYLE_FAMILY", "家庭出游", "旅行风格", "含午休，点位集中", 33),
+    ("STYLE_KIDS", "亲子出游", "旅行风格", "亲子友好，安排午休", 34),
+    ("STYLE_HIKE", "徒步偏好", "旅行风格", "自然线路优先", 35),
+    ("STYLE_PHOTO", "摄影偏好", "旅行风格", "围绕日出日落机位排期", 36),
+    ("STYLE_FOOD", "美食偏好", "旅行风格", "围绕市集与老字号", 37),
+    ("ACTIVITY_HIGH", "高频使用", "活跃度", "近 30 天频繁规划或调整行程", 40),
+    ("ACTIVITY_MEDIUM", "中频使用", "活跃度", "近 30 天有多次使用", 41),
+    ("ACTIVITY_LOW", "低频使用", "活跃度", "近期使用较少", 42),
+    ("EXPORT_PDF", "PDF 行程单", "导出偏好", "偏好导出 PDF 行程单", 50),
+    ("EXPORT_LONG_IMAGE", "长图分享", "导出偏好", "偏好导出长图分享", 51),
+    ("EXPORT_WECHAT_ARTICLE", "公众号文章", "导出偏好", "偏好导出公众号文章", 52),
+]
 
 ROLES = [
     ("ADMIN", "超级管理员", "拥有全部菜单与接口权限"),
@@ -165,6 +198,26 @@ def _ensure_account(db: Session, username: str, password: str, nickname: str,
     return user
 
 
+def _seed_tags(db: Session) -> int:
+    existing = {code for code in db.scalars(select(TagDict.tag_code))}
+    created = 0
+    for code, name, category, desc, sort_no in TAGS:
+        if code in existing:
+            continue
+        db.add(
+            TagDict(
+                tag_code=code,
+                tag_name=name,
+                category=category,
+                description=desc,
+                sort_no=sort_no,
+                status=1,
+            )
+        )
+        created += 1
+    return created
+
+
 def seed_rbac() -> dict:
     if not settings.seed_rbac:
         return {"skipped": True}
@@ -202,12 +255,14 @@ def seed_rbac() -> dict:
             "USER",
             roles["USER"].id,
         )
+        tags = _seed_tags(db)
         db.commit()
 
     summary = {
         "roles": len(roles),
         "menus": len(menus),
         "permissions": len(permissions),
+        "tags": tags,
         "admin": settings.seed_admin_username,
         "demo": settings.seed_demo_username,
     }

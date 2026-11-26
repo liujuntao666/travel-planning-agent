@@ -49,3 +49,39 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 - 反向代理后客户端 IP 由 `X-Forwarded-For` 传递，登录限流按真实 IP 生效
 - 数据库备份：`docker exec travel-mysql mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction travel_planning > backup_$(date +%F).sql`
 - 更新代码：`git pull && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
+
+## 静态资源 CDN 接入
+
+目标：`index.html` 留在源站，带哈希的 `assets/` 交给 CDN，接口与 SSE 继续直连源站。
+
+1. 构建时指定 CDN 前缀（结尾必须带 `/`）：
+
+```bash
+cd frontend/traveler
+VITE_CDN_BASE=https://cdn.example.com/traveler/ npm run build
+```
+
+2. 上传构建产物中的静态资源（只传 assets，不传 index.html）：
+
+```bash
+# 阿里云 OSS 示例
+ossutil cp -r dist/assets oss://your-bucket/traveler/assets --update
+# AWS S3 / Cloudflare R2 示例
+aws s3 sync dist/assets s3://your-bucket/traveler/assets --cache-control "public,max-age=31536000,immutable"
+```
+
+3. 把 `dist/index.html` 交给源站（Nginx/Caddy），保持 `Cache-Control: no-cache`；它引用的 JS/CSS 已经是 CDN 绝对地址。
+
+4. CDN 缓存规则：
+
+| 路径 | 缓存 | 说明 |
+|---|---|---|
+| `/traveler/assets/*` | 1 年 + immutable | 文件名带内容哈希，可永久缓存 |
+| `/traveler/index.html` | no-cache | 每次回源校验，保证发版立即生效 |
+| `/api/*` | 不缓存 | 含鉴权与 SSE，必须回源；SSE 还需关闭缓冲 |
+| `/static/*` | 不缓存或短缓存 | 导出文件按需回源，支持 Range |
+
+5. 跨域：CDN 域名与站点域名不同，需在 CDN 侧开启 CORS（`Access-Control-Allow-Origin` 为站点域名），否则字体、sourcemap 等资源会被浏览器拦截。
+
+6. 回源兜底：源站 Nginx 保留 `/assets/` 的 `try_files` 与长缓存配置，CDN 未命中时仍可正常返回，不需要改 `nginx.conf`。
+

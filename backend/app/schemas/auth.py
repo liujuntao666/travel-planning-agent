@@ -63,3 +63,43 @@ class ResetPasswordIn(BaseModel):
     @classmethod
     def password_policy(cls, value: str) -> str:
         return _check_password(value)
+
+
+class ProfileUpdateIn(BaseModel):
+    """个人资料修改：字段缺省表示不修改，传空字符串表示清空。"""
+
+    nickname: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=128)
+    phone: str | None = Field(default=None, max_length=32)
+
+    @field_validator("nickname", "email", "phone")
+    @classmethod
+    def strip_value(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("email")
+    @classmethod
+    def check_email(cls, value: str | None) -> str | None:
+        if value and not re.fullmatch(EMAIL_PATTERN, value):
+            raise ValueError("邮箱格式不正确，例如 name@example.com")
+        return value
+
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, value: str | None) -> str | None:
+        if value and not re.fullmatch(r"^\+?\d{6,20}$", value):
+            raise ValueError("手机号格式不正确，需为 6-20 位数字")
+        return value
+
+
+class PasswordChangeIn(BaseModel):
+    old_password: str = Field(min_length=1, max_length=64)
+    new_password: str = Field(min_length=8, max_length=64)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_policy(cls, value: str) -> str:
+        return _check_password(value)

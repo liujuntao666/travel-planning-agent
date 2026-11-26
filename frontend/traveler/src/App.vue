@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import ChatPanel from './components/ChatPanel.vue'
+import ChatWidget from './components/ChatWidget.vue'
+import ProfilePanel from './components/ProfilePanel.vue'
 import TripPanel from './components/TripPanel.vue'
 import {
   api,
@@ -43,6 +45,29 @@ const registerForm = reactive({ username: '', password: '', nickname: '', email:
 const forgotForm = reactive({ account: '', code: '', resetToken: '', newPassword: '' })
 
 const user = ref<User | null>(null)
+const profileOpen = ref(false)
+
+function openProfile() {
+  if (!user.value) return
+  profileOpen.value = true
+}
+
+function closeProfile() {
+  profileOpen.value = false
+}
+
+function handleProfileUpdated(next: User) {
+  user.value = next
+  if (next.nickname) localStorage.setItem(NICKNAME_KEY, next.nickname)
+  else localStorage.removeItem(NICKNAME_KEY)
+  showToast('资料已更新')
+}
+
+function handleProfileLogout() {
+  profileOpen.value = false
+  void logout()
+}
+
 const conversations = ref<ConversationSummary[]>([])
 const activeId = ref<number | null>(null)
 
@@ -267,6 +292,7 @@ async function logout() {
   exportRecords.value = []
   compareResult.value = null
   errorMsg.value = ''
+  profileOpen.value = false
 }
 
 async function loadConversations() {
@@ -745,10 +771,11 @@ onMounted(async () => {
         </nav>
 
         <div class="sidebar-footer">
-          <div class="user-chip">
+          <button type="button" class="user-chip" title="查看个人信息" @click="openProfile">
             <span class="user-avatar">{{ (user?.nickname || '旅').slice(0, 1) }}</span>
             <span class="user-name">{{ user?.nickname || '旅行者' }}</span>
-          </div>
+            <span class="user-chip-hint">资料</span>
+          </button>
           <button type="button" class="logout-btn" @click="logout">退出</button>
         </div>
       </aside>
@@ -790,6 +817,16 @@ onMounted(async () => {
           />
         </div>
       </main>
+
+      <ProfilePanel
+        v-if="profileOpen && user"
+        :user="user"
+        @close="closeProfile"
+        @updated="handleProfileUpdated"
+        @logout="handleProfileLogout"
+      />
+
+      <ChatWidget v-if="user" :user="user" />
     </template>
 
     <transition name="toast">
@@ -1383,6 +1420,33 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  padding: 4px 8px;
+  margin-left: -4px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.user-chip:hover {
+  background: var(--panel-alt);
+}
+
+.user-chip:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.user-chip-hint {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
 .user-avatar {
